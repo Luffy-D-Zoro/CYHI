@@ -170,6 +170,13 @@ body {
   color: #ef4444;
   margin-top: 6px;
 }
+.hint-text {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
 .hidden {
   display: none !important;
 }

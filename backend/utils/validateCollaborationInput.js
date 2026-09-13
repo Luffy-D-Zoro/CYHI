@@ -18,7 +18,13 @@ function validateLeader(leader, errors) {
     return null;
   }
 
-  if (!isNonEmptyString(leader.name)) errors.push("leader.name is required.");
+  // Name is intentionally optional here: Team.members[].name defaults to ""
+  // in the schema (see models/Team.js), so there is no data-model reason to
+  // force the leader to type their own name again. Only reject it if it was
+  // supplied as something other than a string.
+  if (leader.name !== undefined && leader.name !== null && typeof leader.name !== "string") {
+    errors.push("leader.name must be a string if provided.");
+  }
   if (!isNonEmptyString(leader.email)) errors.push("leader.email is required.");
   if (!isNonEmptyString(leader.role)) errors.push("leader.role is required.");
 

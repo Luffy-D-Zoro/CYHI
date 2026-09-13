@@ -12,6 +12,7 @@ function sanitizeFormFields(fields) {
     type: f.type,
     placeholder: f.placeholder || "",
     required: Boolean(f.required),
+    index: typeof f.index === "number" ? f.index : undefined, // page order, useful context but never a substitute for real grouping info
   }));
 }
 
@@ -34,6 +35,23 @@ function sanitizeTeamMembers(members) {
  */
 function generateHeuristicAssignments(fields, members) {
   const leader = members.find((m) => m.isLeader) || members[0];
+
+  // Fields whose label appears more than once with no other distinguishing
+  // context (e.g. three fields all literally labeled "Name") — the extractor
+  // captured them faithfully, but nothing in the normalized field contract
+  // (label/placeholder/type/required/index) can say which teammate a given
+  // occurrence belongs to. We surface that ambiguity in the reason instead
+  // of pretending otherwise.
+  const labelCounts = new Map();
+  for (const f of fields) {
+    const key = (f.label || "").trim().toLowerCase();
+    if (!key) continue;
+    labelCounts.set(key, (labelCounts.get(key) || 0) + 1);
+  }
+  const isAmbiguousDuplicateLabel = (field) => {
+    const key = (field.label || "").trim().toLowerCase();
+    return key && (labelCounts.get(key) || 0) > 1;
+  };
 
   const assignments = fields.map((field) => {
     const label = (field.label || "").toLowerCase();
@@ -98,7 +116,21 @@ function generateHeuristicAssignments(fields, members) {
       }
     }
 
-    // 4. Safe default for general/ambiguous fields -> team leader
+    // 4. Safe default for general/ambiguous fields -> team leader.
+    // Do NOT guess based on field order/position here — a repeated "Name"
+    // field at index 3 is not reliably "the 3rd person's name" without real
+    // grouping information (e.g. a section/fieldset the extractor doesn't
+    // currently capture), and guessing that would fabricate certainty the
+    // extraction doesn't actually have.
+    if (isAmbiguousDuplicateLabel(field)) {
+      return {
+        fieldId,
+        memberId: leader.memberId,
+        confidence: 0.4,
+        reason: `Ambiguous: label "${field.label}" repeats across multiple fields with no distinguishing context (no section/group info available), so it can't be reliably attributed to a specific teammate. Defaulted to leader — please reassign manually on the review board.`,
+      };
+    }
+
     return {
       fieldId,
       memberId: leader.memberId,
@@ -130,10 +162,10 @@ Rules:
 1. Every form field receives exactly one initial assignment.
 2. Only supplied fieldIds may be used. Never invent IDs.
 3. Only supplied memberIds may be used. Never invent IDs.
-4. Personal fields should be assigned to the person they clearly refer to, when this can actually be inferred.
+4. Personal fields should be assigned to the person they clearly refer to, when this can actually be inferred from label, placeholder, type, required, or index/order.
 5. Team/project fields generally belong to the leader.
 6. Role-specific fields should use the member whose role best matches.
-7. Ambiguous fields should receive a reasonable safe default rather than invented identity information.
+7. Ambiguous fields (including multiple fields sharing an identical or near-identical label with no other distinguishing information) should receive a reasonable safe default — the leader — with a LOW confidence and a reason that plainly says the extraction lacks enough context to attribute it to a specific teammate. Do not guess an owner based on field order/position alone; that is fabricated certainty, not inference.
 8. confidence must be a number between 0 and 1.
 9. reason must briefly explain the choice.
 

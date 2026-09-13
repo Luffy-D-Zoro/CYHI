@@ -3,7 +3,7 @@
   "name": "CYHI Collaborative Form Workspace",
   "version": "1.0.0",
   "description": "Chrome extension shell for the Collaborative Form Workspace.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "identity", "storage"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "Collaborative Form Workspace",

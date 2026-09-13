@@ -134,6 +134,98 @@ function extractFields() {
   };
 }
 
+// ---------------------------------------------------------------------
+// Filling the original external form from collected responses (CYHI_FILL_FIELDS)
+// ---------------------------------------------------------------------
+// Locates the original DOM element for a field using the same selectors
+// captured at extraction time, trying id, then name, then the fallback
+// cssPath, in that order.
+function locateElement(selectors) {
+  if (!selectors) return null;
+  if (selectors.id) {
+    try {
+      const el = document.querySelector(selectors.id);
+      if (el) return el;
+    } catch (e) {}
+  }
+  if (selectors.name) {
+    try {
+      const el = document.querySelector(selectors.name);
+      if (el) return el;
+    } catch (e) {}
+  }
+  if (selectors.cssPath) {
+    try {
+      const el = document.querySelector(selectors.cssPath);
+      if (el) return el;
+    } catch (e) {}
+  }
+  return null;
+}
+
+// Sets a value the way the page's own JS will actually notice. Many modern
+// forms (React, Vue, etc.) track input values through the framework's own
+// state, not just the DOM attribute — plain `el.value = x` is silently
+// ignored by those. Using the native property setter, then dispatching
+// input/change events, makes the framework re-read the value like a real
+// keystroke would.
+function setNativeValue(el, value) {
+  const tag = el.tagName;
+  const proto =
+    tag === "TEXTAREA"
+      ? window.HTMLTextAreaElement.prototype
+      : tag === "SELECT"
+      ? window.HTMLSelectElement.prototype
+      : window.HTMLInputElement.prototype;
+
+  const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+  if (descriptor && descriptor.set) {
+    descriptor.set.call(el, value);
+  } else {
+    el.value = value;
+  }
+
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+// For <select>, match the target value against an option's value first,
+// then its visible text, since the final aggregated value may be stored as
+// whichever the member's browser submitted.
+function fillSelectField(el, value) {
+  const target = String(value).trim().toLowerCase();
+  const options = Array.from(el.options || []);
+  const byValue = options.find((o) => o.value.trim().toLowerCase() === target);
+  const byText = options.find((o) => o.textContent.trim().toLowerCase() === target);
+  const match = byValue || byText;
+  if (!match) return false;
+  setNativeValue(el, match.value);
+  return true;
+}
+
+// Fills fields only. Never submits the form and never clicks a submit
+// button — the leader reviews and submits manually.
+function fillFields(fields) {
+  return (fields || []).map((f) => {
+    const el = locateElement(f.selectors);
+    if (!el) {
+      return { fieldId: f.fieldId, filled: false, reason: "Element not found on the current page." };
+    }
+    try {
+      if (el.tagName === "SELECT") {
+        const ok = fillSelectField(el, f.value);
+        return ok
+          ? { fieldId: f.fieldId, filled: true }
+          : { fieldId: f.fieldId, filled: false, reason: "No matching option in the select field." };
+      }
+      setNativeValue(el, f.value == null ? "" : String(f.value));
+      return { fieldId: f.fieldId, filled: true };
+    } catch (err) {
+      return { fieldId: f.fieldId, filled: false, reason: err.message };
+    }
+  });
+}
+
 if (!window.CYHI_CONTENT_SCRIPT_LOADED) {
   window.CYHI_CONTENT_SCRIPT_LOADED = true;
 
@@ -142,6 +234,16 @@ if (!window.CYHI_CONTENT_SCRIPT_LOADED) {
       try {
         const data = extractFields();
         sendResponse({ ok: true, data });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
+      return false; // Synchronous response
+    }
+
+    if (message?.type === "CYHI_FILL_FIELDS") {
+      try {
+        const results = fillFields(message.fields);
+        sendResponse({ ok: true, results });
       } catch (err) {
         sendResponse({ ok: false, error: err.message });
       }

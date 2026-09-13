@@ -7,11 +7,32 @@ const FRONTEND_BASE_URL = "http://localhost:5173";
 
 let members = [];
 
+// The leader's email/name as detected from the signed-in Chrome profile via
+// chrome.identity.getProfileUserInfo(). This is real browser identity, not a
+// fake auth system: no OAuth flow, no invented account. If it's unavailable
+// (user not signed into Chrome, or restricted by enterprise policy), we fall
+// back to asking for the leader's email manually — name stays optional
+// either way, since Team.members[].name already defaults to "" in the
+// backend schema.
+let detectedLeader = null;
+
+// chrome.storage.local key for "this exact page already has a CYHI
+// collaboration" lookups. Keyed by the extracted sourceUrl so re-opening the
+// popup on the same original form can offer to fill it instead of starting
+// a new collaboration. This is purely extension-side bookkeeping (formId +
+// field selectors) — it never stores response values; MongoDB stays the
+// only source of truth for those (see GET /api/forms/:formId/final).
+function storageKeyForUrl(url) {
+  return `cyhi_collab::${url}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const leaderNameInput = document.getElementById('leader-name-input');
   const leaderRoleInput = document.getElementById('leader-role-input');
   const leaderEmailInput = document.getElementById('leader-email-input');
   const leaderError = document.getElementById('leader-error');
+  const leaderDetected = document.getElementById('leader-detected');
+  const leaderManualFields = document.getElementById('leader-manual-fields');
   const roleInput = document.getElementById('role-input');
   const emailInput = document.getElementById('email-input');
   const addBtn = document.getElementById('add-member-btn');
@@ -20,6 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('send-invites-btn');
   const emailError = document.getElementById('email-error');
   const statusMessage = document.getElementById('status-message');
+  const fillSection = document.getElementById('fill-section');
+  const fillFormBtn = document.getElementById('fill-form-btn');
+  const fillResult = document.getElementById('fill-result');
+  const startNewBtn = document.getElementById('start-new-btn');
+  const leaderSection = document.getElementById('leader-section');
 
   function renderMembers() {
     // Clear list except empty state
@@ -83,23 +109,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // Reads and validates the leader's own details from the form. Returns
-  // null (and shows an inline error) if anything required is missing —
-  // this replaces what used to be a hardcoded { name: "Leader", email:
-  // "leader@example.com" } stub.
+  // Reads and validates the leader's own details. If the Chrome profile
+  // email was auto-detected, we use it directly and skip asking the leader
+  // to type it again — that's the whole point of detectedLeader. Otherwise
+  // we fall back to the manual email field. Name is never required: the
+  // backend schema (Team.members[].name) already defaults to "", so forcing
+  // it here would just be unnecessary friction with no data-model backing.
   function getValidatedLeader() {
     hideLeaderError();
 
-    const name = leaderNameInput.value.trim();
     const role = leaderRoleInput.value.trim() || 'Team Leader';
+
+    if (detectedLeader && detectedLeader.email) {
+      const email = detectedLeader.email.toLowerCase();
+      if (members.find((m) => m.email === email)) {
+        showLeaderError('Your detected email cannot also be a teammate email.');
+        return null;
+      }
+      return { name: detectedLeader.name || '', role, email };
+    }
+
+    const name = leaderNameInput.value.trim();
     const email = leaderEmailInput.value.trim().toLowerCase();
 
-    if (!name) {
-      showLeaderError('Your name is required.');
-      return null;
-    }
     if (!email) {
-      showLeaderError('Your email is required.');
+      showLeaderError('Your email is required — we could not detect it automatically from Chrome.');
       return null;
     }
     if (!EMAIL_REGEX.test(email)) {
@@ -112,6 +146,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return { name, role, email };
+  }
+
+  // Tries to auto-detect the leader's identity from the signed-in Chrome
+  // profile. If it succeeds, hides the manual name/email inputs so the
+  // leader never has to re-enter information the browser already knows.
+  function tryDetectLeader() {
+    if (!chrome.identity || !chrome.identity.getProfileUserInfo) return;
+
+    chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, (info) => {
+      if (chrome.runtime.lastError || !info || !info.email) {
+        return; // Not signed into Chrome, or restricted by policy — fall back to manual entry.
+      }
+      detectedLeader = { email: info.email, name: '' };
+      leaderManualFields.classList.add('hidden');
+      leaderDetected.textContent = `Detected from your Chrome profile: ${info.email}`;
+      leaderDetected.classList.remove('hidden');
+    });
   }
 
   
@@ -315,6 +366,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Hand off to the leader review page — invitations are sent from
       // there, only after the leader confirms the assignments.
+      // Retain the real formId/teamId (and the selectors we already
+      // extracted) against this exact page, so a later visit to the same
+      // original form can offer to fill it from collected responses
+      // without hardcoding or re-deriving any of these IDs.
+      try {
+        await chrome.storage.local.set({
+          [storageKeyForUrl(extractedForm.sourceUrl)]: {
+            formId,
+            teamId,
+            fields: extractedForm.fields,
+            createdAt: Date.now(),
+          },
+        });
+      } catch (storageErr) {
+        console.error('[CYHI POPUP] Failed to persist collaboration state:', storageErr);
+      }
+
       const reviewUrl = `${FRONTEND_BASE_URL}/review/${encodeURIComponent(formId)}?teamId=${encodeURIComponent(teamId)}`;
       chrome.tabs.create({ url: reviewUrl });
 
@@ -348,6 +416,124 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ---------- Fill Original Form Flow ----------
+  let activeCollab = null; // { formId, teamId, fields, sourceUrl }
+
+  function showCreateFlow() {
+    fillSection.classList.add('hidden');
+    leaderSection.classList.remove('hidden');
+  }
+
+  function showFillFlow() {
+    leaderSection.classList.add('hidden');
+    fillSection.classList.remove('hidden');
+  }
+
+  async function checkForExistingCollaboration() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.url) return;
+
+      const stored = await chrome.storage.local.get(storageKeyForUrl(tab.url));
+      const record = stored[storageKeyForUrl(tab.url)];
+      if (record && record.formId && record.teamId) {
+        activeCollab = { ...record, sourceUrl: tab.url };
+        showFillFlow();
+      }
+    } catch (err) {
+      console.error('[CYHI POPUP] Failed to check for existing collaboration:', err);
+    }
+  }
+
+  function showFillResult(text, isError) {
+    fillResult.textContent = text;
+    fillResult.classList.remove('hidden');
+    fillResult.style.color = isError ? '#b91c1c' : '#334155';
+  }
+
+  fillFormBtn.addEventListener('click', async () => {
+    if (!activeCollab) return;
+
+    fillFormBtn.disabled = true;
+    fillFormBtn.textContent = 'Fetching responses...';
+    fillResult.classList.add('hidden');
+
+    try {
+      // MongoDB (via this endpoint) is the source of truth for values —
+      // the only thing we read from local storage is the selector/fieldId
+      // mapping captured at extraction time.
+      const res = await fetch(`${API_BASE_URL}/api/forms/${encodeURIComponent(activeCollab.formId)}/final`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error((data && data.error) || 'Unable to fetch final responses from the backend.');
+      }
+
+      const finalValues = data.finalValues || {};
+      const fillList = (activeCollab.fields || [])
+        .filter((f) => Object.prototype.hasOwnProperty.call(finalValues, f.fieldId))
+        .map((f) => ({
+          fieldId: f.fieldId,
+          type: f.type,
+          selectors: f.selectors,
+          value: finalValues[f.fieldId],
+        }));
+
+      if (fillList.length === 0) {
+        showFillResult('No collected responses are available yet for this form.', true);
+        return;
+      }
+
+      fillFormBtn.textContent = 'Filling form...';
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) throw new Error('No active tab found.');
+
+      const fillMessage = { type: 'CYHI_FILL_FIELDS', fields: fillList };
+      let fillRes;
+      try {
+        fillRes = await new Promise((resolve, reject) => {
+          chrome.tabs.sendMessage(tab.id, fillMessage, (response) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(response);
+          });
+        });
+      } catch (err) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+        fillRes = await new Promise((resolve, reject) => {
+          chrome.tabs.sendMessage(tab.id, fillMessage, (response) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(response);
+          });
+        });
+      }
+
+      if (!fillRes || !fillRes.ok) {
+        throw new Error((fillRes && fillRes.error) || 'The page did not confirm the fields were filled.');
+      }
+
+      const filledCount = fillRes.results.filter((r) => r.filled).length;
+      const missing = (data.missingFields || []).length;
+      showFillResult(
+        `Filled ${filledCount} of ${fillList.length} field(s) on the page.` +
+          (missing > 0 ? ` ${missing} field(s) still have no submitted response.` : '') +
+          ' Review the form yourself — CYHI never submits it for you.',
+        filledCount < fillList.length
+      );
+    } catch (err) {
+      showFillResult(err.message || 'Failed to fill the form.', true);
+    } finally {
+      fillFormBtn.disabled = false;
+      fillFormBtn.textContent = 'Fill with collected responses';
+    }
+  });
+
+  startNewBtn.addEventListener('click', () => {
+    activeCollab = null;
+    showCreateFlow();
+  });
+
   // Initial render
   renderMembers();
+  tryDetectLeader();
+  checkForExistingCollaboration();
 });

@@ -7,6 +7,7 @@ const Form = require("./models/Form");
 const Team = require("./models/Team");
 const Assignment = require("./models/Assignment");
 const Invitation = require("./models/Invitation");
+const Response = require("./models/Response");
 
 const BASE_URL = "http://localhost:5000";
 
@@ -398,8 +399,98 @@ async function runAllTests() {
     console.log("  ✓ Rejected incomplete assignments count (HTTP 422)");
   }
 
+  // ================= NEW: Member response persistence (Section D/E/F) =================
+  // Tests 1-18 above never actually exercised POST /api/join/:token with a
+  // response body, so the persistence path was untested. These fill that gap.
+
+  console.log("\n[Test 19] Member submits responses -> verify Response docs actually exist in MongoDB...");
+  // Aman (from Test 16) is assigned f3 only, per that invitation lookup.
+  const amanInvite = await Invitation.findOne({ formId, memberId: amanMember.memberId }).lean();
+  const submitRes = await request("POST", `/api/join/${amanInvite.token}`, {
+    responses: [{ fieldId: "f3", value: "Node.js + Express + MongoDB" }],
+  });
+  if (submitRes.status !== 200 || !submitRes.data.success) {
+    throw new Error(`Member submission failed: ${JSON.stringify(submitRes)}`);
+  }
+  const savedResponse = await Response.findOne({
+    formId,
+    fieldId: "f3",
+    memberId: amanMember.memberId,
+  }).lean();
+  if (!savedResponse || savedResponse.value !== "Node.js + Express + MongoDB") {
+    throw new Error(
+      `Response document was not actually persisted in MongoDB: ${JSON.stringify(savedResponse)}`
+    );
+  }
+  console.log("  ✓ Response document found directly in MongoDB:", {
+    formId: savedResponse.formId.toString(),
+    fieldId: savedResponse.fieldId,
+    memberId: savedResponse.memberId.toString(),
+    value: savedResponse.value,
+  });
+
+  console.log("\n[Test 20] Resubmitting the same field updates the existing Response instead of duplicating it...");
+  const beforeCount = await Response.countDocuments({ formId, fieldId: "f3", memberId: amanMember.memberId });
+  const resubmitRes = await request("POST", `/api/join/${amanInvite.token}`, {
+    responses: [{ fieldId: "f3", value: "Node.js + Express + MongoDB + Redis" }],
+  });
+  if (resubmitRes.status !== 200 || !resubmitRes.data.success) {
+    throw new Error(`Resubmission failed: ${JSON.stringify(resubmitRes)}`);
+  }
+  const afterCount = await Response.countDocuments({ formId, fieldId: "f3", memberId: amanMember.memberId });
+  if (afterCount !== 1 || beforeCount !== 1) {
+    throw new Error(`Expected exactly 1 Response document before/after resubmit, got before=${beforeCount} after=${afterCount}`);
+  }
+  const updated = await Response.findOne({ formId, fieldId: "f3", memberId: amanMember.memberId }).lean();
+  if (updated.value !== "Node.js + Express + MongoDB + Redis") {
+    throw new Error(`Resubmit did not update the value, got: ${updated.value}`);
+  }
+  console.log("  ✓ Existing Response document updated in place (no duplicate created).");
+
+  console.log("\n[Test 21] A batch containing an unauthorized fieldId writes NOTHING (no partial writes)...");
+  // "totally_unassigned_field" doesn't exist on this form/assignment set at
+  // all, so it's guaranteed to fail the ownership check regardless of how
+  // earlier tests reassigned f1/f2/f4 — this isolates the batch-validation
+  // behavior itself rather than depending on assignment history.
+  const beforeAny = await Response.find({ formId, memberId: amanMember.memberId }).lean();
+  const badBatchRes = await request("POST", `/api/join/${amanInvite.token}`, {
+    responses: [
+      { fieldId: "f3", value: "This value should NOT be persisted" },
+      { fieldId: "totally_unassigned_field", value: "Not assigned to Aman at all" },
+    ],
+  });
+  if (badBatchRes.status < 400) {
+    throw new Error(`Expected the invalid batch to be rejected, got status ${badBatchRes.status}`);
+  }
+  const afterAny = await Response.find({ formId, memberId: amanMember.memberId }).lean();
+  const f3Doc = afterAny.find((r) => r.fieldId === "f3");
+  if (!f3Doc || f3Doc.value !== "Node.js + Express + MongoDB + Redis") {
+    throw new Error(
+      `Invalid batch caused a partial write — f3's value changed even though the batch was rejected: ${JSON.stringify(f3Doc)}`
+    );
+  }
+  if (afterAny.some((r) => r.fieldId === "totally_unassigned_field")) {
+    throw new Error("Invalid batch caused a partial write — an unauthorized field was persisted.");
+  }
+  if (afterAny.length !== beforeAny.length) {
+    throw new Error("Invalid batch changed the number of Response documents for Aman — partial write occurred.");
+  }
+  console.log(`  ✓ Rejected with status ${badBatchRes.status} and left MongoDB completely unchanged (${afterAny.length} doc(s), same as before).`);
+
+  console.log("\n[Test 22] Final aggregation reads the persisted Response value (not a second store)...");
+  const finalRes = await request("GET", `/api/forms/${formId}/final`);
+  if (finalRes.status !== 200) {
+    throw new Error(`Final aggregation failed: ${JSON.stringify(finalRes)}`);
+  }
+  if (finalRes.data.finalValues.f3 !== "Node.js + Express + MongoDB + Redis") {
+    throw new Error(
+      `Final aggregation did not reflect the persisted MongoDB value for f3: ${JSON.stringify(finalRes.data.finalValues)}`
+    );
+  }
+  console.log("  ✓ /api/forms/:formId/final returned the exact value stored in the Response collection for f3.");
+
   console.log("\n=======================================================");
-  console.log("ALL VERIFICATION CHECKS (1-18) PASSED SUCCESSFULLY! 🎉");
+  console.log("ALL VERIFICATION CHECKS (1-22) PASSED SUCCESSFULLY! 🎉");
   console.log("=======================================================");
 
   process.exit(0);
