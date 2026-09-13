@@ -18,3 +18,4 @@ cyhi-backend-models.patch
 cyhi-collaborations-endpoint.patch
 cyhi-backend-models.patch
 *.patch
+*.zip
