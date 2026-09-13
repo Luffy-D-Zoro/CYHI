@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test": "node test_verification.js"
+    "test": "node test_verification.js",
+    "verify:gmail": "node scripts/verify-gmail.js"
   },
   "dependencies": {
     "@google/genai": "^2.22.0",

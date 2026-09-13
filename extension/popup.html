@@ -32,6 +32,30 @@
       <p>Collect teammate information before submitting the form.</p>
     </section>
 
+    <!-- Your Details (Leader) Section -->
+    <section class="card add-member-card">
+      <header class="card-header">
+        <h3>Your Details (Leader)</h3>
+      </header>
+      <div class="card-body">
+        <div class="form-group">
+          <label for="leader-name-input">Your Name</label>
+          <input type="text" id="leader-name-input" placeholder="Your full name" />
+        </div>
+
+        <div class="form-group">
+          <label for="leader-role-input">Your Role</label>
+          <input type="text" id="leader-role-input" value="Team Leader" />
+        </div>
+
+        <div class="form-group">
+          <label for="leader-email-input">Your Email</label>
+          <input type="email" id="leader-email-input" placeholder="you@example.com" />
+          <p id="leader-error" class="error-msg hidden"></p>
+        </div>
+      </div>
+    </section>
+
     <!-- Add Team Member Section -->
     <section class="card add-member-card">
       <header class="card-header">
@@ -80,7 +104,7 @@
   <!-- FIXED FOOTER -->
   <footer class="footer">
     <button id="send-invites-btn" class="btn btn-primary">
-      Send Invitations
+      Create Collaboration &amp; Review
     </button>
   </footer>
   

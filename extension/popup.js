@@ -1,6 +1,17 @@
+// Backend/frontend URLs. Change these for a deployed environment (e.g.
+// Railway backend URL / deployed frontend URL) — this is a plain,
+// unbundled Manifest V3 extension with no build step, so there's no
+// import.meta.env here; these two constants are the single place to edit.
+const API_BASE_URL = "http://localhost:5000";
+const FRONTEND_BASE_URL = "http://localhost:5173";
+
 let members = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+  const leaderNameInput = document.getElementById('leader-name-input');
+  const leaderRoleInput = document.getElementById('leader-role-input');
+  const leaderEmailInput = document.getElementById('leader-email-input');
+  const leaderError = document.getElementById('leader-error');
   const roleInput = document.getElementById('role-input');
   const emailInput = document.getElementById('email-input');
   const addBtn = document.getElementById('add-member-btn');
@@ -59,6 +70,50 @@ document.addEventListener('DOMContentLoaded', () => {
     emailError.textContent = '';
     emailError.classList.add('hidden');
   }
+
+  function showLeaderError(msg) {
+    leaderError.textContent = msg;
+    leaderError.classList.remove('hidden');
+  }
+
+  function hideLeaderError() {
+    leaderError.textContent = '';
+    leaderError.classList.add('hidden');
+  }
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Reads and validates the leader's own details from the form. Returns
+  // null (and shows an inline error) if anything required is missing —
+  // this replaces what used to be a hardcoded { name: "Leader", email:
+  // "leader@example.com" } stub.
+  function getValidatedLeader() {
+    hideLeaderError();
+
+    const name = leaderNameInput.value.trim();
+    const role = leaderRoleInput.value.trim() || 'Team Leader';
+    const email = leaderEmailInput.value.trim().toLowerCase();
+
+    if (!name) {
+      showLeaderError('Your name is required.');
+      return null;
+    }
+    if (!email) {
+      showLeaderError('Your email is required.');
+      return null;
+    }
+    if (!EMAIL_REGEX.test(email)) {
+      showLeaderError('Please enter a valid email format.');
+      return null;
+    }
+    if (members.find((m) => m.email === email)) {
+      showLeaderError('Your email cannot also be a teammate email.');
+      return null;
+    }
+
+    return { name, role, email };
+  }
+
   
   function resetStatus() {
     statusMessage.textContent = '';
@@ -143,11 +198,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---------- Send Invitations Flow ----------
+  // ---------- Create Collaboration & Review Flow ----------
   sendBtn.addEventListener('click', async () => {
-    console.log("[CYHI POPUP] Send button clicked");
+    console.log("[CYHI POPUP] Create Collaboration button clicked");
     if (members.length === 0) return;
-    
+
+    const leader = getValidatedLeader();
+    if (!leader) return;
+
     sendBtn.disabled = true;
     sendBtn.textContent = 'Extracting...';
     hideError();
@@ -171,11 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sendBtn.textContent = 'Creating Collaboration...';
 
       const payload = {
-        leader: {
-          name: "Leader",
-          email: "leader@example.com",
-          role: "Team Leader"
-        },
+        leader,
         sourceUrl: extractedForm.sourceUrl,
         sourceType: extractedForm.sourceType,
         fields: extractedForm.fields,
@@ -184,12 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       console.log("[CYHI POPUP] Creating collaboration with payload:", payload);
 
-      const res = await fetch("http://localhost:5000/api/collaborations", {
+      const res = await fetch(`${API_BASE_URL}/api/collaborations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      
+
       console.log("[CYHI POPUP] Collaboration HTTP status:", res.status);
 
       let responseData;
@@ -204,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
           );
       }
 
-      // Check FIRST API
       if (!res.ok) {
           let errorMsg = "Unable to create collaboration.";
 
@@ -219,86 +272,79 @@ document.addEventListener('DOMContentLoaded', () => {
 
       console.log("[CYHI] Collaboration created:", responseData);
 
-      // Get the REAL team ID
-      const teamId = responseData.teamId;
+      const { formId, teamId } = responseData;
 
-      if (!teamId) {
+      if (!formId || !teamId) {
           throw new Error(
-              "Collaboration was created, but the backend did not return a teamId."
+              "Collaboration was created, but the backend did not return a formId/teamId."
           );
       }
 
-      console.log("[CYHI POPUP] Team ID:", teamId);
-      console.log("[CYHI POPUP] Sending invitations...");
-      sendBtn.textContent = 'Sending Invitations...';
+      // AI assignment MUST happen before anything else — the review page has
+      // nothing to show and invitations would carry no assigned fields
+      // without it. If this fails, stop here: no review page, no invitations.
+      console.log("[CYHI POPUP] Generating AI field assignments...");
+      sendBtn.textContent = 'Assigning fields (AI)...';
 
-      // STEP 2: Actually send invitations
-      const sendRes = await fetch(
-          `http://localhost:5000/api/collaborations/${encodeURIComponent(teamId)}/invitations/send`,
-          {
-              method: "POST",
-              headers: {
-                  "Content-Type": "application/json"
-              }
-          }
-      );
+      const aiRes = await fetch(`${API_BASE_URL}/api/forms/${encodeURIComponent(formId)}/ai-assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId })
+      });
 
-      let sendData;
-
+      let aiData;
       try {
-          sendData = await sendRes.json();
+          aiData = await aiRes.json();
       } catch (jsonErr) {
           throw new Error(
-              sendRes.status >= 500
-                  ? "Email service/backend error. Check the backend console."
-                  : "Invalid response from invitation service."
+              aiRes.status >= 500
+                  ? "AI assignment service/backend error. Check the backend console."
+                  : "Invalid response from the AI assignment service."
           );
       }
 
-      console.log("[CYHI] Invitation send response:", sendData);
-
-      // Check SECOND API
-      if (!sendRes.ok) {
+      if (!aiRes.ok || !aiData.success) {
           throw new Error(
-              sendData.error ||
-              sendData.message ||
-              "Failed to send invitations."
+              (aiData.details && Array.isArray(aiData.details) && aiData.details.join(", ")) ||
+              aiData.error ||
+              "AI assignment failed. No invitations were sent."
           );
       }
 
-      // Check application-level failures
-      if (sendData.failed && sendData.failed > 0) {
-          throw new Error(
-              `${sendData.failed} invitation(s) failed to send.`
-          );
-      }
+      console.log("[CYHI] AI assignments generated:", aiData);
 
-      console.log("[CYHI] Invitations sent successfully:", sendData);
+      // Hand off to the leader review page — invitations are sent from
+      // there, only after the leader confirms the assignments.
+      const reviewUrl = `${FRONTEND_BASE_URL}/review/${encodeURIComponent(formId)}?teamId=${encodeURIComponent(teamId)}`;
+      chrome.tabs.create({ url: reviewUrl });
 
-      statusMessage.textContent = "Invitations sent successfully.";
+      statusMessage.textContent = "Assignments generated. Review opened in a new tab.";
       statusMessage.className =
           "text-xs text-center font-medium p-2 mb-4 rounded bg-green-50 text-green-700 border border-green-200";
       statusMessage.classList.remove("hidden");
 
-      sendBtn.textContent = 'Invitations Sent';
+      sendBtn.textContent = 'Review Opened';
 
-      // Disable inputs after successful mock send
+      // Disable inputs — this popup's job is done; the review page takes over.
       addBtn.disabled = true;
       emailInput.disabled = true;
       roleInput.disabled = true;
+      leaderNameInput.disabled = true;
+      leaderRoleInput.disabled = true;
+      leaderEmailInput.disabled = true;
     } catch (err) {
       console.error("[CYHI POPUP] Error:", err);
       const errMsg = (err && err.message) ? err.message : String(err);
-      
+
       const finalMsg = errMsg === "Failed to fetch" || errMsg.includes("NetworkError")
         ? "Cannot connect to CYHI server. Make sure the backend is running."
         : errMsg;
-        
+
       statusMessage.textContent = finalMsg;
       statusMessage.className = 'text-xs text-center font-medium p-2 mb-4 rounded bg-red-50 text-red-700 border border-red-200';
       statusMessage.classList.remove('hidden');
       sendBtn.disabled = false;
-      sendBtn.textContent = 'Send Invitations';
+      sendBtn.textContent = 'Create Collaboration & Review';
     }
   });
 
