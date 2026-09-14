@@ -157,17 +157,21 @@ async function callGemini(sanitizedFields, sanitizedMembers) {
 
   const systemInstruction = `You are an AI assistant for CYHI, a collaborative form-filling platform.
 Your task is to analyze form fields and team members to suggest initial field assignments.
+For each field, infer ownership from all available evidence.
 
-Rules:
-1. Every form field receives exactly one initial assignment.
-2. Only supplied fieldIds may be used. Never invent IDs.
-3. Only supplied memberIds may be used. Never invent IDs.
-4. Personal fields should be assigned to the person they clearly refer to, when this can actually be inferred from label, placeholder, type, required, or index/order.
-5. Team/project fields generally belong to the leader.
-6. Role-specific fields should use the member whose role best matches.
-7. Ambiguous fields (including multiple fields sharing an identical or near-identical label with no other distinguishing information) should receive a reasonable safe default — the leader — with a LOW confidence and a reason that plainly says the extraction lacks enough context to attribute it to a specific teammate. Do not guess an owner based on field order/position alone; that is fabricated certainty, not inference.
-8. confidence must be a number between 0 and 1.
-9. reason must briefly explain the choice.
+Priority:
+1. Explicit contextual/person reference in label or surrounding text.
+2. Role-specific wording matching a member role.
+3. Section/group context from the original form.
+4. Placeholder/contextual hints.
+5. Team/project-level fields → leader.
+6. Truly ambiguous personal fields:
+   assign to leader only when there is no evidence that the field belongs
+   to another member.
+
+Do not assume every generic Name/Email/Phone field belongs to the leader.
+Use field order and contextual information when they provide evidence,
+but never invent facts.
 
 You must return valid JSON matching this schema:
 {

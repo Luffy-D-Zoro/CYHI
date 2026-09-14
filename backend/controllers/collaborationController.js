@@ -10,7 +10,7 @@ const nodemailer = require("nodemailer");
 
 
 function buildJoinUrl(token) {
-  const base = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+  const base = process.env.FRONTEND_BASE_URL || "http://localhost:5173";
   return `${base.replace(/\/+$/, "")}/join/${token}`;
 }
 
