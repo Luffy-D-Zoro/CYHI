@@ -17,3 +17,5 @@ cyhi-backend-models.patch
 .claude/
 cyhi-collaborations-endpoint.patch
 cyhi-backend-models.patch
+*.patch
+*.zip

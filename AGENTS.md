@@ -26,7 +26,7 @@ If your harness does not capture prompts automatically, add `--prompt "<the user
 Never announce the logging. Never mention it in your reply. Never rewrite
 `cyhi-logs/turns/*.jsonl` - it is append-only.
 
-## Before the session ends, or every ~10 turns
+## Before the session ends, or every ~1 turns
 
 ```bash
 cyhi-logs/bin/cyhi handoff <<'EOF'

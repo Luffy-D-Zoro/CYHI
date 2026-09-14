@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Member Form</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: #f4f6f8;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #222;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .member {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      background: #fafafa;
+    }
+
+    .member h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: bold;
+      color: #444;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #4a90e2;
+    }
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #357abd;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>Team Registration</h1>
+    <p class="subtitle">Enter details for all 5 team members</p>
+
+    <form>
+
+      <!-- Member 1 -->
+      <div class="member">
+        <h2>Member 1</h2>
+
+        <div class="form-group">
+          <label for="member1-name">Name</label>
+          <input
+            type="text"
+            id="member1-name"
+            name="member1-name"
+            placeholder="Enter full name"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="member1-phone">Phone Number</label>
+          <input
+            type="tel"
+            id="member1-phone"
+            name="member1-phone"
+            placeholder="Enter phone number"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="member1-email">Email</label>
+          <input
+            type="email"
+            id="member1-email"
+            name="member1-email"
+            placeholder="Enter email address"
+            required
+          >
+        </div>
+      </div>
+
+      <!-- Member 2 -->
+      <div class="member">
+        <h2>Member 2</h2>
+
+        <div class="form-group">
+          <label for="member2-name">Name</label>
+          <input type="text" id="member2-name" name="member2-name"
+                 placeholder="Enter full name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member2-phone">Phone Number</label>
+          <input type="tel" id="member2-phone" name="member2-phone"
+                 placeholder="Enter phone number" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member2-email">Email</label>
+          <input type="email" id="member2-email" name="member2-email"
+                 placeholder="Enter email address" required>
+        </div>
+      </div>
+
+      <!-- Member 3 -->
+      <div class="member">
+        <h2>Member 3</h2>
+
+        <div class="form-group">
+          <label for="member3-name">Name</label>
+          <input type="text" id="member3-name" name="member3-name"
+                 placeholder="Enter full name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member3-phone">Phone Number</label>
+          <input type="tel" id="member3-phone" name="member3-phone"
+                 placeholder="Enter phone number" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member3-email">Email</label>
+          <input type="email" id="member3-email" name="member3-email"
+                 placeholder="Enter email address" required>
+        </div>
+      </div>
+
+      <!-- Member 4 -->
+      <div class="member">
+        <h2>Member 4</h2>
+
+        <div class="form-group">
+          <label for="member4-name">Name</label>
+          <input type="text" id="member4-name" name="member4-name"
+                 placeholder="Enter full name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member4-phone">Phone Number</label>
+          <input type="tel" id="member4-phone" name="member4-phone"
+                 placeholder="Enter phone number" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member4-email">Email</label>
+          <input type="email" id="member4-email" name="member4-email"
+                 placeholder="Enter email address" required>
+        </div>
+      </div>
+
+      <!-- Member 5 -->
+      <div class="member">
+        <h2>Member 5</h2>
+
+        <div class="form-group">
+          <label for="member5-name">Name</label>
+          <input type="text" id="member5-name" name="member5-name"
+                 placeholder="Enter full name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member5-phone">Phone Number</label>
+          <input type="tel" id="member5-phone" name="member5-phone"
+                 placeholder="Enter phone number" required>
+        </div>
+
+        <div class="form-group">
+          <label for="member5-email">Email</label>
+          <input type="email" id="member5-email" name="member5-email"
+                 placeholder="Enter email address" required>
+        </div>
+      </div>
+
+      <button type="submit">Submit Team Details</button>
+
+    </form>
+
+  </div>
+
+</body>
+</html>
+```

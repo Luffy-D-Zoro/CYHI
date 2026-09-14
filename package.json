@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.4"
+  },
+  "dependencies": {
+    "jsdom": "^30.0.1"
   }
 }

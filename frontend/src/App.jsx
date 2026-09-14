@@ -1,10 +1,18 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import MemberPage from './pages/MemberPage';
+import ReviewPage from './pages/ReviewPage';
+
 function App() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-      <h1 className="text-center text-3xl font-semibold tracking-tight sm:text-4xl">
-        Collaborative Form Workspace
-      </h1>
-    </main>
+    <Router>
+      <Routes>
+        <Route path="/join/:token" element={<MemberPage />} />
+        <Route path="/review/:formId" element={<ReviewPage />} />
+        {/* Redirect root to a token for testing purposes */}
+        <Route path="/" element={<Navigate to="/join/mock-token-123" replace />} />
+      </Routes>
+    </Router>
   );
 }
 

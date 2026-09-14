@@ -18,6 +18,10 @@ const invitationSchema = new Schema(
       enum: ["pending", "opened", "completed"],
       default: "pending",
     },
+    sentAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true } // createdAt covers the spec's "createdAt" field
 );

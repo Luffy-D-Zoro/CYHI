@@ -4,9 +4,13 @@ const Team = require("../models/Team");
 const Invitation = require("../models/Invitation");
 const ApiError = require("../utils/ApiError");
 const validateCollaborationInput = require("../utils/validateCollaborationInput");
+const emailService = require("../services/emailService");
+const nodemailer = require("nodemailer");
+
+
 
 function buildJoinUrl(token) {
-  const base = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+  const base = process.env.FRONTEND_BASE_URL || "http://localhost:5173";
   return `${base.replace(/\/+$/, "")}/join/${token}`;
 }
 
@@ -31,7 +35,7 @@ function buildTeamMembers(leader, members) {
 async function buildCollaborationDocs(data, session) {
   const [form] = await Form.create(
     [{ sourceUrl: data.sourceUrl, sourceType: data.sourceType, fields: data.fields }],
-    { session }
+    { session, ordered: true }
   );
 
   const teamMembers = buildTeamMembers(data.leader, data.members);
@@ -39,21 +43,23 @@ async function buildCollaborationDocs(data, session) {
 
   const [team] = await Team.create(
     [{ formId: form._id, ownerId: leaderMember._id, members: teamMembers }],
-    { session }
+    { session, ordered: true }
   );
 
   const nonLeaderMembers = team.members.filter((m) => !m.isLeader);
-  const invitations = nonLeaderMembers.length
-    ? await Invitation.create(
-        nonLeaderMembers.map((m) => ({
-          formId: form._id,
-          memberId: m._id,
-          email: m.email,
-          status: "pending",
-        })),
-        { session }
-      )
-    : [];
+  let invitations = [];
+
+  if (nonLeaderMembers.length) {
+    invitations = await Invitation.create(
+      nonLeaderMembers.map((m) => ({
+        formId: form._id,
+        memberId: m._id,
+        email: m.email,
+        status: "pending",
+      })),
+      { session, ordered: true }
+    );
+  }
 
   return { form, team, invitations };
 }
@@ -203,4 +209,93 @@ async function getCollaboration(req, res, next) {
   }
 }
 
-module.exports = { createCollaboration, getCollaboration };
+function sanitizeErrorMessage(msg) {
+  if (!msg) return "Failed to send email.";
+  let cleaned = String(msg);
+  const apiKey = process.env.GMAIL_APP_PASSWORD;
+  if (apiKey && apiKey.trim()) {
+    cleaned = cleaned.replaceAll(apiKey.trim(), "[REDACTED]");
+  }
+  return cleaned;
+}
+
+async function sendInvitations(req, res, next) {
+  try {
+    const { teamId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+      throw new ApiError(400, `Invalid teamId: "${teamId}".`);
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      throw new ApiError(404, "Collaboration not found.");
+    }
+
+    const form = await Form.findById(team.formId);
+    if (!form) {
+      throw new ApiError(404, "Form not found for this collaboration.");
+    }
+
+    const pendingInvitations = await Invitation.find({
+      formId: team.formId,
+      status: "pending",
+      sentAt: null,
+    });
+
+    if (pendingInvitations.length === 0) {
+      return res.status(200).json({
+        message: "No pending invitations to send.",
+        total: 0,
+        sent: 0,
+        failed: 0,
+        results: [],
+      });
+    }
+
+    
+
+    let sent = 0;
+    let failed = 0;
+    const results = [];
+
+    for (const invitation of pendingInvitations) {
+      const joinUrl = buildJoinUrl(invitation.token);
+      try {
+        await emailService.sendInvitationEmail({
+          to: invitation.email,
+          joinUrl,
+        });
+
+        invitation.sentAt = new Date();
+        await invitation.save();
+
+        sent++;
+        results.push({
+          email: invitation.email,
+          status: "sent",
+        });
+      } catch (err) {
+        failed++;
+        results.push({
+          email: invitation.email,
+          status: "failed",
+          error: sanitizeErrorMessage(err.message),
+        });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Invitations processed.",
+      total: pendingInvitations.length,
+      sent,
+      failed,
+      results,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { createCollaboration, getCollaboration, sendInvitations };
+
