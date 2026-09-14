@@ -2,7 +2,8 @@
 // Railway backend URL / deployed frontend URL) — this is a plain,
 // unbundled Manifest V3 extension with no build step, so there's no
 // import.meta.env here; these two constants are the single place to edit.
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "https://cyhi-production.up.railway.app";
+//const FRONTEND_BASE_URL = "https://YOUR-VERCEL-APP.vercel.app";
 const FRONTEND_BASE_URL = "http://localhost:5173";
 
 let members = [];
