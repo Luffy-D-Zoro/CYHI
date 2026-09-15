@@ -1,5 +1,7 @@
 # CYHI — Collaborative Form Workspace
 
+> **Maintained continuation:** This is my maintained version of the original CYHI project. I continued development here with my own fixes, integrations, deployment, and project-specific changes.
+
 > **One request. Many contributors. One final submission.**
 
 CYHI turns a normal web form into a collaborative workspace. A leader opens a form through the Chrome extension, adds teammates by email and role, lets AI propose field ownership, reviews the assignments, and sends each teammate a focused link containing only their fields. Completed responses are collected centrally and can be pushed back into the original form for final review and submission.
