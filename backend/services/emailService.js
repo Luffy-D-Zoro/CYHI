@@ -41,10 +41,20 @@ function getTransporter() {
   return transporter;
 }
 
-const INVITATION_SUBJECT = "You've been invited to collaborate on a form";
+const INVITATION_SUBJECT = "You've been invited to collaborate on a form Through CYHI";
 
 function buildInvitationText(joinUrl) {
-  return `You have been invited to fill your part of a form.\n\nOpen your form:\n${joinUrl}`;
+  return `
+  Hi,\n
+
+  You've been invited to contribute to a form through CYHI.
+
+  Open your assigned fields:\n
+
+  You can review and submit your responses there.\n
+  \nOpen your form:\n${joinUrl}\n\n
+  — CYHI  
+  `;
 }
 
 function buildInvitationHtml(joinUrl) {
