@@ -40,18 +40,28 @@ The backend and frontend are already deployed, so a normal user does **not** nee
 
 Until the Chrome Web Store release is available, use Chrome's **Load unpacked** flow.
 
-1. Download the preconfigured extension ZIP from the project's Releases/files.
-2. Extract the ZIP.
-3. Open:
+### Install CYHI
 
-   ```text
-   chrome://extensions
-   ```
+1. **Download the extension**  
+   [Download CYHI Extension](https://github.com/Luffy-D-Zoro/CYHI/releases/latest)
 
-4. Turn on **Developer mode**.
-5. Click **Load unpacked**.
-6. Select the extracted `extension` folder.
-7. Pin CYHI from the Chrome extensions menu.
+2. **Extract the ZIP**  
+   Extract `cyhi-extension.zip` to any folder.
+
+3. **Open Chrome Extensions**  
+   Go to:
+   `chrome://extensions`
+
+4. **Enable Developer mode**  
+   Turn on **Developer mode** in the top-right corner.
+
+5. **Load CYHI**  
+   Click **Load unpacked** and select the extracted folder containing `manifest.json`.
+
+6. **Start using CYHI**  
+   Open a web form, click the CYHI extension, and create your collaboration.
+
+> A Chrome Web Store version is planned. Until then, CYHI is installed using Chrome's **Load unpacked** option.
 
 > This is the only setup a normal user needs for the current deployed demo.
 
