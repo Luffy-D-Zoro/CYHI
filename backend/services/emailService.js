@@ -29,10 +29,15 @@ function getTransporter() {
   }
 
   transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: {
+      user,
+      pass
+    }
   });
-
+  
   return transporter;
 }
 
